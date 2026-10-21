@@ -14,10 +14,13 @@
 # The pull request never runs its own review (10.16.2). pull_request_target runs this file as the default branch has it,
 # so a pull request that edits the review — the verdict's exit code, the prompt, the tools — is reviewed by the review in
 # force, and claude-code-action, which refuses a workflow that differs from the default branch's, runs. The pull request's
-# code is read as data and never executed: the checkout keeps no credential, Claude has no shell, review-check.js comes
-# from the pinned plugin and runs outside the checkout (Bun reads bunfig.toml, preload included, from its working
-# directory), and .sa-review/ is made fresh, so a pull request cannot bring findings of its own. The result is the commit
-# status "Architecture review" on the pull request's head commit — the required check. A pull request from a fork fails it.
+# code is read as data and never executed (10.16.3, the action's own pattern for pull_request_target): the default branch
+# is checked out at the workspace root — Claude's working directory, its configuration, .sa-review/ and the MCP server's
+# URL are the default branch's — and the pull request's head into pr-head/, which Claude reads through --add-dir; neither
+# checkout keeps a credential, Claude has no shell, and review-check.js comes from the pinned plugin and runs outside both
+# (Bun reads bunfig.toml, preload included, from its working directory). The action works with this job's GITHUB_TOKEN —
+# no OIDC exchange, which pull_request_target refuses. The result is the commit status "Architecture review" on the pull
+# request's head commit — the required check. A pull request from a fork fails it.
 # On a self-hosted runner Claude never loads the runner user's ~/.claude: its step has a HOME and CLAUDE_CONFIG_DIR of its
 # own, where the action also installs its Bun; this job's own Bun has another (setup-bun writes $HOME/.bun).
 #
@@ -42,7 +45,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.16.2
+  SA_PLUGIN_REF: v10.16.3
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
@@ -55,7 +58,6 @@ jobs:
       pull-requests: write
       issues: read
       statuses: write              # the result: the commit status "Architecture review" on the head commit
-      id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
       SA_ARCHITECTURE_REPO: ${{ vars.SA_ARCHITECTURE_REPO }}
@@ -74,11 +76,15 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=failure -f context="Architecture review" -f description="a fork is not reviewed: push it to a branch here" -f target_url="$RUN_URL" > /dev/null
           echo "::error::a pull request from a fork is not reviewed here — a maintainer pushes it to a branch of this repository"
           exit 1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4      # the default branch at the root: the action expects a repository there, and runs in it
+        with:
+          persist-credentials: false   # Claude reads the checkouts: no token in a .git/config
+      - uses: actions/checkout@v4      # the pull request, as data
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-head
           fetch-depth: 0
-          persist-credentials: false   # Claude reads the checkout: no token in .git/config
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         id: bun
         env:
@@ -90,15 +96,16 @@ jobs:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           git clone --quiet --depth 1 --branch "$SA_PLUGIN_REF" "$SA_PLUGIN_REPO" "$RUNNER_TEMP/sa"
+          # the server the default branch binds — never one the pull request names
           url=${SA_INDEX_MCP_URL:-$(jq -r '.server // empty' .architecture.json 2>/dev/null)}
           [ -n "$url" ] || { echo "::error::no MCP server: set SA_INDEX_MCP_URL or \"server\" in .architecture.json"; exit 1; }
           if [ -n "$SA_INDEX_TOKEN" ]; then
             jq -n --arg url "$url" --arg t "Bearer $SA_INDEX_TOKEN" '{mcpServers: {architecture: {type: "http", url: $url, headers: {Authorization: $t}}}}' > "$RUNNER_TEMP/mcp.json"
           else jq -n --arg url "$url" '{mcpServers: {architecture: {type: "http", url: $url}}}' > "$RUNNER_TEMP/mcp.json"; fi
           echo "SA_INDEX_MCP_URL=$url" >> "$GITHUB_ENV"
-          # what Claude reads — inside the checkout, the only place it may read; made fresh, whatever the pull request carries
+          # what Claude reads beside pr-head/ — in the default branch's checkout, made fresh on every run
           rm -rf .sa-review && mkdir -p .sa-review "$RUNNER_TEMP/claude-home/.claude"   # Claude's own home (the next step)
-          git diff "$BASE...HEAD" > .sa-review/pr.diff
+          git -C pr-head diff "$BASE...HEAD" > .sa-review/pr.diff
           printf '%s\n' "$BODY" > .sa-review/pr-body.md
       - name: Review the diff against the build pack
         id: claude
@@ -111,15 +118,17 @@ jobs:
           CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-home/.claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
           prompt: |
             Review pull request #${{ github.event.pull_request.number }} of this repository against its architecture build pack.
             You only review: change no code, and write nothing but .sa-review/findings.json.
 
-            1. Read .architecture.json (project, component, architecture_version). Call get_build_pack for that component at
+            The pull request's files are under pr-head/ (its head commit); the working directory is the default branch.
+            1. Read pr-head/.architecture.json (project, component, architecture_version). Call get_build_pack for that component at
                that version, then get_build_part for "instructions" (BUILD.md, whose rules you apply) and for every part the
                diff touches: the spec, security, the interfaces, cross-cutting-standards, the adr: parts.
             2. Read .sa-review/pr.diff (this pull request's changes) and .sa-review/pr-body.md (its description). Read a
-               changed file in the checkout when the diff alone is not enough.
+               changed file under pr-head/ when the diff alone is not enough.
             3. Find what this diff does that the pack does not allow, against BUILD.md's rules: 1 a contract not implemented
                exactly (a path, operation, field, type, name or status differs); 2 a component not called by its canonical
                name; 3 a gap filled — a value, limit, timeout or behaviour the pack does not state, where a TODO(architecture)
@@ -137,6 +146,7 @@ jobs:
                architect about exactly this departure, put it in "escalation". An empty list when the diff keeps the pack.
           claude_args: |
             --mcp-config ${{ runner.temp }}/mcp.json
+            --add-dir pr-head
             --allowedTools "Read(./**),Glob,Grep,Edit(./.sa-review/findings.json),mcp__architecture"
             --disallowedTools "Bash,WebFetch,WebSearch"
       - name: Keep Claude's transcript
@@ -152,9 +162,9 @@ jobs:
           set +e
           W="$GITHUB_WORKSPACE"
           # this job's Bun by its path (claude-code-action installs a Bun of its own, first on PATH after it), run outside the
-          # checkout: Bun reads bunfig.toml from its working directory, and the checkout is the pull request's
-          ( cd "$RUNNER_TEMP" && "${{ steps.bun.outputs.bun-path }}" "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" "$W" --base "$BASE" \
-            --findings "$W/.sa-review/findings.json" --body-file "$W/.sa-review/pr-body.md" --out "$RUNNER_TEMP/review.md" > /dev/null )
+          # checkouts: Bun reads bunfig.toml from its working directory. The pull request's binding, the default branch's server
+          ( cd "$RUNNER_TEMP" && "${{ steps.bun.outputs.bun-path }}" "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" "$W/pr-head" --base "$BASE" \
+            --server "$SA_INDEX_MCP_URL" --findings "$W/.sa-review/findings.json" --body-file "$W/.sa-review/pr-body.md" --out "$RUNNER_TEMP/review.md" > /dev/null )
           verdict=$?
           [ -s "$RUNNER_TEMP/review.md" ] || { echo "::error::review-check.js wrote no review (exit $verdict)"; exit 1; }
           cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
