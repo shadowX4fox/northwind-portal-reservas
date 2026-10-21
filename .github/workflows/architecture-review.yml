@@ -14,6 +14,8 @@
 # Only a pull request from this repository is reviewed: one from a fork fails the check — the review reaches the MCP server,
 # often from a self-hosted runner, and claude-code-action refuses an author without write access anyway. Claude reads the
 # checkout only, writes its findings file only, and runs no shell and no web tool.
+# On a self-hosted runner it never loads the runner user's ~/.claude: its step has a HOME and CLAUDE_CONFIG_DIR of its own,
+# where the action also installs its Bun; this job's own Bun has another (setup-bun writes $HOME/.bun).
 #
 # Repository settings:
 #   secret   CLAUDE_CODE_OAUTH_TOKEN  /install-github-app
@@ -36,7 +38,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.16.0
+  SA_PLUGIN_REF: v10.16.1
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
@@ -67,6 +69,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
+        id: bun
+        env:
+          HOME: ${{ runner.temp }}/bun-home   # setup-bun installs into $HOME/.bun: never the runner user's own Bun
         with:
           bun-version: 1.4.2
       - name: The plugin, the MCP server, the diff
@@ -81,12 +86,18 @@ jobs:
           else jq -n --arg url "$url" '{mcpServers: {architecture: {type: "http", url: $url}}}' > "$RUNNER_TEMP/mcp.json"; fi
           echo "SA_INDEX_MCP_URL=$url" >> "$GITHUB_ENV"
           # what Claude reads — inside the checkout, the only place it may read
-          mkdir -p .sa-review
+          mkdir -p .sa-review "$RUNNER_TEMP/claude-home/.claude"   # Claude's own home (the next step)
           git diff "$BASE...HEAD" > .sa-review/pr.diff
           printf '%s\n' "$BODY" > .sa-review/pr-body.md
       - name: Review the diff against the build pack
         id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          # a self-hosted runner is a machine someone uses: Claude gets a home and a configuration of its own, cleared with
+          # the job — never the runner user's ~/.claude (plugins, MCP servers, settings, hooks), and the action's own settings
+          # (enableAllProjectMcpServers) and the Bun it installs land there, not in that user's (10.16.1)
+          HOME: ${{ runner.temp }}/claude-home
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-home/.claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
@@ -128,7 +139,8 @@ jobs:
         if: always() && github.event.pull_request.head.repo.full_name == github.repository
         run: |
           set +e
-          bun "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" . --base "$BASE" \
+          # this job's Bun by its path: claude-code-action installs a Bun of its own, which comes first on PATH after it
+          "${{ steps.bun.outputs.bun-path }}" "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" . --base "$BASE" \
             --findings .sa-review/findings.json --body-file .sa-review/pr-body.md --out "$RUNNER_TEMP/review.md" > /dev/null
           verdict=$?
           [ -s "$RUNNER_TEMP/review.md" ] || { echo "::error::review-check.js wrote no review (exit $verdict)"; exit 1; }
