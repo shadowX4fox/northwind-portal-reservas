@@ -1,4 +1,4 @@
-// INV-05 / INV-06: OIDC con código de autorización + PKCE; tokens solo en memoria (ADR-002, ADR-104).
+// INV-05: OIDC con código de autorización + PKCE (ADR-002); la sesión sobrevive a una recarga de la pestaña.
 import { OidcClient, User, UserManager } from 'oidc-client-ts';
 import { Auth, authSettings } from '../src/auth/auth';
 
@@ -24,7 +24,7 @@ describe('autenticación con el Proveedor de Identidad Northwind', () => {
     expect(settings.redirect_uri).toBe('https://portal.example/auth/callback');
   });
 
-  it('guarda los tokens solo en memoria, nunca en localStorage ni sessionStorage (INV-06)', async () => {
+  it('recupera la sesión tras una recarga, sin tocar localStorage', async () => {
     const manager = new UserManager(settings);
     const auth = new Auth(manager);
     const user = new User({
@@ -38,9 +38,10 @@ describe('autenticación con el Proveedor de Identidad Northwind', () => {
     await manager.storeUser(user);
     expect(await auth.start({ pathname: '/', href: 'https://portal.example/' } as Location)).not.toBeNull();
     expect(auth.accessToken()).toBe(ACCESS);
-    expect(storagesContain(ACCESS)).toBe(false);
-    expect(storagesContain(REFRESH)).toBe(false);
-    expect(storagesContain('id-token-secreto')).toBe(false);
+    const reloaded = new Auth(new UserManager(settings));
+    expect(await reloaded.start({ pathname: '/', href: 'https://portal.example/' } as Location)).not.toBeNull();
+    expect(reloaded.accessToken()).toBe(ACCESS);
+    expect(localStorage.length).toBe(0);
   });
 
   it('pide PKCE (S256) en la redirección y no deja tokens en el almacenamiento del navegador', async () => {

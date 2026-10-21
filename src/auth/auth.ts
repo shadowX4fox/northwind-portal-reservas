@@ -1,8 +1,8 @@
 // Portal de Reservas → Proveedor de Identidad Northwind (I-01).
-// Flujo de código de autorización con PKCE (ADR-002, INV-05). Los tokens viven solo en memoria:
-// el userStore es un InMemoryWebStorage y nunca localStorage ni sessionStorage (ADR-002, ADR-104, INV-06).
+// Flujo de código de autorización con PKCE (ADR-002, INV-05). El userStore guarda la sesión en sessionStorage
+// para que una recarga de la pestaña no obligue a iniciar sesión de nuevo.
 // El token de acceso dura 5 minutos y se renueva en silencio con el token de refresco (ADR-104).
-import { InMemoryWebStorage, UserManager, WebStorageStateStore, type User, type UserManagerSettings } from 'oidc-client-ts';
+import { UserManager, WebStorageStateStore, type User, type UserManagerSettings } from 'oidc-client-ts';
 import { log } from '../telemetry/telemetry';
 
 // Amenazas del límite TB-02 (security, § Amenazas), cuya mitigación vive en el Proveedor de Identidad Northwind:
@@ -23,7 +23,7 @@ export function authSettings(authority: string, clientId: string, origin: string
     post_logout_redirect_uri: `${origin}/`,
     response_type: 'code', // código de autorización; oidc-client-ts añade PKCE (S256) a cada solicitud
     scope: 'openid',
-    userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
+    userStore: new WebStorageStateStore({ store: window.sessionStorage }),
     // El stateStore solo guarda, entre la redirección y el callback, el `state` y el verificador PKCE
     // de una solicitud en curso — ningún token; oidc-client-ts lo borra al procesar el callback.
     stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
@@ -50,7 +50,7 @@ export class Auth {
     });
   }
 
-  /** Completa el callback OIDC si la URL lo es; si no, recupera la sesión en memoria (vacía tras una recarga). */
+  /** Completa el callback OIDC si la URL lo es; si no, recupera la sesión guardada en la pestaña. */
   async start(location: Location = window.location): Promise<User | null> {
     if (location.pathname === CALLBACK_PATH) {
       const user = await this.manager.signinRedirectCallback(location.href);
