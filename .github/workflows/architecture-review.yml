@@ -11,9 +11,15 @@
 #                repository (SA_ARCHITECTURE_REPO) that the pull request cites covers it; no findings fail closed. One
 #                comment on the pull request, updated on every run
 #
-# Only a pull request from this repository is reviewed: one from a fork fails the check — the review reaches the MCP server,
-# often from a self-hosted runner, and claude-code-action refuses an author without write access anyway. Claude reads the
-# checkout only, writes its findings file only, and runs no shell and no web tool.
+# The pull request never runs its own review (10.16.2). pull_request_target runs this file as the default branch has it,
+# so a pull request that edits the review — the verdict's exit code, the prompt, the tools — is reviewed by the review in
+# force, and claude-code-action, which refuses a workflow that differs from the default branch's, runs. The pull request's
+# code is read as data and never executed: the checkout keeps no credential, Claude has no shell, review-check.js comes
+# from the pinned plugin and runs outside the checkout (Bun reads bunfig.toml, preload included, from its working
+# directory), and .sa-review/ is made fresh, so a pull request cannot bring findings of its own. The result is the commit
+# status "Architecture review" on the pull request's head commit — the required check. A pull request from a fork fails it.
+# On a self-hosted runner Claude never loads the runner user's ~/.claude: its step has a HOME and CLAUDE_CONFIG_DIR of its
+# own, where the action also installs its Bun; this job's own Bun has another (setup-bun writes $HOME/.bun).
 #
 # Repository settings:
 #   secret   CLAUDE_CODE_OAUTH_TOKEN  /install-github-app
@@ -26,7 +32,7 @@
 name: Architecture review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, edited]   # edited: the body may now cite an escalation
 
 permissions: {}
@@ -36,18 +42,19 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.16.0
+  SA_PLUGIN_REF: v10.16.2
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
   review:
-    name: Architecture review
+    name: review
     runs-on: ${{ fromJSON(vars.SA_REVIEW_RUNS_ON || '"ubuntu-latest"') }}
     timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: write
       issues: read
+      statuses: write              # the result: the commit status "Architecture review" on the head commit
       id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
@@ -55,18 +62,27 @@ jobs:
       SA_INDEX_MCP_URL: ${{ vars.SA_INDEX_MCP_URL }}
       SA_INDEX_TOKEN: ${{ secrets.SA_INDEX_TOKEN }}
       BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
       PR: ${{ github.event.pull_request.number }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Reviewing
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=pending -f context="Architecture review" -f description="held to the build pack" -f target_url="$RUN_URL" > /dev/null
       - name: A pull request of this repository
         if: github.event.pull_request.head.repo.full_name != github.repository
         run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=failure -f context="Architecture review" -f description="a fork is not reviewed: push it to a branch here" -f target_url="$RUN_URL" > /dev/null
           echo "::error::a pull request from a fork is not reviewed here — a maintainer pushes it to a branch of this repository"
           exit 1
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false   # Claude reads the checkout: no token in .git/config
       - uses: oven-sh/setup-bun@v2
+        id: bun
+        env:
+          HOME: ${{ runner.temp }}/bun-home   # setup-bun installs into $HOME/.bun: never the runner user's own Bun
         with:
           bun-version: 1.4.2
       - name: The plugin, the MCP server, the diff
@@ -80,13 +96,19 @@ jobs:
             jq -n --arg url "$url" --arg t "Bearer $SA_INDEX_TOKEN" '{mcpServers: {architecture: {type: "http", url: $url, headers: {Authorization: $t}}}}' > "$RUNNER_TEMP/mcp.json"
           else jq -n --arg url "$url" '{mcpServers: {architecture: {type: "http", url: $url}}}' > "$RUNNER_TEMP/mcp.json"; fi
           echo "SA_INDEX_MCP_URL=$url" >> "$GITHUB_ENV"
-          # what Claude reads — inside the checkout, the only place it may read
-          mkdir -p .sa-review
+          # what Claude reads — inside the checkout, the only place it may read; made fresh, whatever the pull request carries
+          rm -rf .sa-review && mkdir -p .sa-review "$RUNNER_TEMP/claude-home/.claude"   # Claude's own home (the next step)
           git diff "$BASE...HEAD" > .sa-review/pr.diff
           printf '%s\n' "$BODY" > .sa-review/pr-body.md
       - name: Review the diff against the build pack
         id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          # a self-hosted runner is a machine someone uses: Claude gets a home and a configuration of its own, cleared with
+          # the job — never the runner user's ~/.claude (plugins, MCP servers, settings, hooks), and the action's own settings
+          # (enableAllProjectMcpServers) and the Bun it installs land there, not in that user's (10.16.1)
+          HOME: ${{ runner.temp }}/claude-home
+          CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-home/.claude
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
@@ -128,8 +150,11 @@ jobs:
         if: always() && github.event.pull_request.head.repo.full_name == github.repository
         run: |
           set +e
-          bun "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" . --base "$BASE" \
-            --findings .sa-review/findings.json --body-file .sa-review/pr-body.md --out "$RUNNER_TEMP/review.md" > /dev/null
+          W="$GITHUB_WORKSPACE"
+          # this job's Bun by its path (claude-code-action installs a Bun of its own, first on PATH after it), run outside the
+          # checkout: Bun reads bunfig.toml from its working directory, and the checkout is the pull request's
+          ( cd "$RUNNER_TEMP" && "${{ steps.bun.outputs.bun-path }}" "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" "$W" --base "$BASE" \
+            --findings "$W/.sa-review/findings.json" --body-file "$W/.sa-review/pr-body.md" --out "$RUNNER_TEMP/review.md" > /dev/null )
           verdict=$?
           [ -s "$RUNNER_TEMP/review.md" ] || { echo "::error::review-check.js wrote no review (exit $verdict)"; exit 1; }
           cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
@@ -137,4 +162,13 @@ jobs:
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- sa-architecture-review -->")) | .id' | head -n 1)
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/review.md" > /dev/null
           else gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/review.md"; fi
+          state=$([ "$verdict" -eq 0 ] && echo success || echo failure)
+          summary=$(sed -n 's/^Held to .*: \(.*\)\.$/\1/p' "$RUNNER_TEMP/review.md" | head -n 1)
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state="$state" -f context="Architecture review" -f description="${summary:-see the review}" -f target_url="$RUN_URL" > /dev/null
+          touch "$RUNNER_TEMP/status-posted"
           exit $verdict
+      - name: The status, when the verdict never ran
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          [ -e "$RUNNER_TEMP/status-posted" ] && exit 0
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=failure -f context="Architecture review" -f description="the review did not finish: re-run it" -f target_url="$RUN_URL" > /dev/null
