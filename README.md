@@ -50,3 +50,5 @@ Cada una queda como `TODO(architecture)` en el código; ninguna bloquea la const
 | `interface:portal-de-reservas→servicio-de-reservas` | 84 | Garantía de orden entre solicitudes |
 | `interface:portal-de-reservas→servicio-de-reservas` | 123–127 | Semántica de fallo del upstream |
 | `asset:openapi.yaml` (Servicio de Reservas) | 13, 31, 346 | Host del servidor; obligatoriedad de los parámetros de disponibilidad; tipo de `site` en `Booking` |
+
+La revisión de arquitectura publica su resultado como el estado `Architecture review` del commit.
