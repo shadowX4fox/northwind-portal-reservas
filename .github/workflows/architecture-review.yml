@@ -1,0 +1,140 @@
+# Architecture review — GitHub Actions. Copy to .github/workflows/architecture-review.yml in a service repository bound to an
+# architecture (.architecture.json) whose developers build it in an IDE — attended. Make "Architecture review" a required
+# status check of the default branch, and a pull request merges only when it keeps the build pack (10.16.0):
+#
+#   1. code      review-check.js: the contract copies under architecture/ are the pack's bytes, the contracts are committed
+#                alone, the commits name the version and the pack_revision, the binding is not behind; new TODO(architecture)
+#   2. judgement Claude reads the diff against the pack through the architecture MCP server — BUILD.md's rules: contracts
+#                exactly, the architecture's names, no gap filled, security never worked around, the standards and ADRs,
+#                budgets — and writes its findings, each citing the pack part
+#   3. verdict   review-check.js decides: a blocking finding stands unless an open [ESC-…] issue of the architecture
+#                repository (SA_ARCHITECTURE_REPO) that the pull request cites covers it; no findings fail closed. One
+#                comment on the pull request, updated on every run
+#
+# Only a pull request from this repository is reviewed: one from a fork fails the check — the review reaches the MCP server,
+# often from a self-hosted runner, and claude-code-action refuses an author without write access anyway. Claude reads the
+# checkout only, writes its findings file only, and runs no shell and no web tool.
+#
+# Repository settings:
+#   secret   CLAUDE_CODE_OAUTH_TOKEN  /install-github-app
+#   variable SA_ARCHITECTURE_REPO     owner/repo of the architecture — where an escalation that clears a finding lives
+#   variable SA_INDEX_MCP_URL         the architecture MCP server (…/mcp); without it, the server .architecture.json names
+#   variable SA_REVIEW_RUNS_ON        optional, the runner as JSON (["self-hosted","sa-index"]) when only a runner of yours
+#                                     reaches the server; default ubuntu-latest
+#   secret   SA_INDEX_TOKEN           optional, when the server asks for a bearer token
+#   branch protection: "Architecture review" required on the default branch
+name: Architecture review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]   # edited: the body may now cite an escalation
+
+permissions: {}
+
+concurrency:
+  group: architecture-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  SA_PLUGIN_REF: v10.16.0
+  SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
+
+jobs:
+  review:
+    name: Architecture review
+    runs-on: ${{ fromJSON(vars.SA_REVIEW_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SA_ARCHITECTURE_REPO: ${{ vars.SA_ARCHITECTURE_REPO }}
+      SA_INDEX_MCP_URL: ${{ vars.SA_INDEX_MCP_URL }}
+      SA_INDEX_TOKEN: ${{ secrets.SA_INDEX_TOKEN }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: A pull request of this repository
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::a pull request from a fork is not reviewed here — a maintainer pushes it to a branch of this repository"
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: The plugin, the MCP server, the diff
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git clone --quiet --depth 1 --branch "$SA_PLUGIN_REF" "$SA_PLUGIN_REPO" "$RUNNER_TEMP/sa"
+          url=${SA_INDEX_MCP_URL:-$(jq -r '.server // empty' .architecture.json 2>/dev/null)}
+          [ -n "$url" ] || { echo "::error::no MCP server: set SA_INDEX_MCP_URL or \"server\" in .architecture.json"; exit 1; }
+          if [ -n "$SA_INDEX_TOKEN" ]; then
+            jq -n --arg url "$url" --arg t "Bearer $SA_INDEX_TOKEN" '{mcpServers: {architecture: {type: "http", url: $url, headers: {Authorization: $t}}}}' > "$RUNNER_TEMP/mcp.json"
+          else jq -n --arg url "$url" '{mcpServers: {architecture: {type: "http", url: $url}}}' > "$RUNNER_TEMP/mcp.json"; fi
+          echo "SA_INDEX_MCP_URL=$url" >> "$GITHUB_ENV"
+          # what Claude reads — inside the checkout, the only place it may read
+          mkdir -p .sa-review
+          git diff "$BASE...HEAD" > .sa-review/pr.diff
+          printf '%s\n' "$BODY" > .sa-review/pr-body.md
+      - name: Review the diff against the build pack
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} of this repository against its architecture build pack.
+            You only review: change no code, and write nothing but .sa-review/findings.json.
+
+            1. Read .architecture.json (project, component, architecture_version). Call get_build_pack for that component at
+               that version, then get_build_part for "instructions" (BUILD.md, whose rules you apply) and for every part the
+               diff touches: the spec, security, the interfaces, cross-cutting-standards, the adr: parts.
+            2. Read .sa-review/pr.diff (this pull request's changes) and .sa-review/pr-body.md (its description). Read a
+               changed file in the checkout when the diff alone is not enough.
+            3. Find what this diff does that the pack does not allow, against BUILD.md's rules: 1 a contract not implemented
+               exactly (a path, operation, field, type, name or status differs); 2 a component not called by its canonical
+               name; 3 a gap filled — a value, limit, timeout or behaviour the pack does not state, where a TODO(architecture)
+               or a question belongs; 4 security worked around — a caller let in that the security part does not list, an
+               interface without documented authentication left open; 5 a cross-cutting standard or a governing ADR not
+               followed (errors, versioning, identity, idempotency, observability, resilience); 6 a budget ignored; 9, 10
+               an architecture question answered locally instead of escalated, a Tier 0 write made here. Judge only what
+               this diff changes, never code it does not touch.
+            4. Write .sa-review/findings.json, exactly:
+               {"reviewed": true, "findings": [{"rule": <n>, "severity": "blocking" | "warning", "file": "<path>",
+                 "line": <n>, "part": "<the pack part id, e.g. spec, security, interface:…, adr:ADR-001>", "part_line": <n>,
+                 "finding": "<one sentence: what the code does, and what the part states>", "escalation": "<owner/repo#N or null>"}]}
+               Blocking: the diff departs from something a part states. Warning: a doubt, or a departure you cannot pin to a
+               line of a part. Cite the part every time. When the description cites an [ESC-…] issue that asks the
+               architect about exactly this departure, put it in "escalation". An empty list when the diff keeps the pack.
+          claude_args: |
+            --mcp-config ${{ runner.temp }}/mcp.json
+            --allowedTools "Read(./**),Glob,Grep,Edit(./.sa-review/findings.json),mcp__architecture"
+            --disallowedTools "Bash,WebFetch,WebSearch"
+      - name: Keep Claude's transcript
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-review-${{ github.run_id }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 7
+      - name: The verdict
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          set +e
+          bun "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" . --base "$BASE" \
+            --findings .sa-review/findings.json --body-file .sa-review/pr-body.md --out "$RUNNER_TEMP/review.md" > /dev/null
+          verdict=$?
+          [ -s "$RUNNER_TEMP/review.md" ] || { echo "::error::review-check.js wrote no review (exit $verdict)"; exit 1; }
+          cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
+          # one comment, updated on every run
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- sa-architecture-review -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/review.md" > /dev/null
+          else gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/review.md"; fi
+          exit $verdict
