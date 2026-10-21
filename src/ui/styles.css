@@ -1,0 +1,11 @@
+:root { font-family: system-ui, sans-serif; color: #1b1b1b; background: #fafafa; }
+body { margin: 0; padding: 16px; max-width: 960px; margin-inline: auto; }
+header nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+button[aria-pressed='true'] { font-weight: 700; }
+form.franja { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+label { display: flex; flex-direction: column; gap: 4px; }
+ul.salas { list-style: none; padding: 0; }
+ul.salas li { padding: 8px 0; border-bottom: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+ul.salas li[data-status='occupied'] { color: #777; }
+[role='alert'] { color: #b00020; }
+[role='dialog'] { border: 1px solid #ccc; padding: 16px; margin-top: 16px; background: #fff; }
