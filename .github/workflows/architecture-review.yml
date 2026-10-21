@@ -28,6 +28,8 @@
 #   secret   CLAUDE_CODE_OAUTH_TOKEN  /install-github-app
 #   variable SA_ARCHITECTURE_REPO     owner/repo of the architecture — where an escalation that clears a finding lives
 #   variable SA_INDEX_MCP_URL         the architecture MCP server (…/mcp); without it, the server .architecture.json names
+#   variable SA_DOC_LANGUAGE          the architecture's language (en | es): the review, its comment and its status speak it
+#                                     (ci-setup.js --settings reads it from the architecture's ARCHITECTURE.md); default en
 #   variable SA_REVIEW_RUNS_ON        optional, the runner as JSON (["self-hosted","sa-index"]) when only a runner of yours
 #                                     reaches the server; default ubuntu-latest
 #   secret   SA_INDEX_TOKEN           optional, when the server asks for a bearer token
@@ -45,7 +47,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.16.3
+  SA_PLUGIN_REF: v10.17.0
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
@@ -63,17 +65,18 @@ jobs:
       SA_ARCHITECTURE_REPO: ${{ vars.SA_ARCHITECTURE_REPO }}
       SA_INDEX_MCP_URL: ${{ vars.SA_INDEX_MCP_URL }}
       SA_INDEX_TOKEN: ${{ secrets.SA_INDEX_TOKEN }}
+      SA_DOC_LANGUAGE: ${{ vars.SA_DOC_LANGUAGE }}
       BASE: ${{ github.event.pull_request.base.sha }}
       HEAD: ${{ github.event.pull_request.head.sha }}
       PR: ${{ github.event.pull_request.number }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Reviewing
-        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=pending -f context="Architecture review" -f description="held to the build pack" -f target_url="$RUN_URL" > /dev/null
+        run: gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=pending -f context="Architecture review" -f description="${{ vars.SA_DOC_LANGUAGE == 'es' && 'contrastando con el build pack' || 'held to the build pack' }}" -f target_url="$RUN_URL" > /dev/null
       - name: A pull request of this repository
         if: github.event.pull_request.head.repo.full_name != github.repository
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=failure -f context="Architecture review" -f description="a fork is not reviewed: push it to a branch here" -f target_url="$RUN_URL" > /dev/null
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=failure -f context="Architecture review" -f description="${{ vars.SA_DOC_LANGUAGE == 'es' && 'un fork no se revisa: súbalo a una rama de este repositorio' || 'a fork is not reviewed: push it to a branch here' }}" -f target_url="$RUN_URL" > /dev/null
           echo "::error::a pull request from a fork is not reviewed here — a maintainer pushes it to a branch of this repository"
           exit 1
       - uses: actions/checkout@v4      # the default branch at the root: the action expects a repository there, and runs in it
@@ -144,6 +147,8 @@ jobs:
                Blocking: the diff departs from something a part states. Warning: a doubt, or a departure you cannot pin to a
                line of a part. Cite the part every time. When the description cites an [ESC-…] issue that asks the
                architect about exactly this departure, put it in "escalation". An empty list when the diff keeps the pack.
+               Write every "finding" in ${{ vars.SA_DOC_LANGUAGE == 'es' && 'Spanish (Latin America)' || 'English' }}, the architecture's language; the
+               rule numbers, part ids, file paths, code and the architecture's names stay as they are.
           claude_args: |
             --mcp-config ${{ runner.temp }}/mcp.json
             --add-dir pr-head
@@ -164,7 +169,7 @@ jobs:
           # this job's Bun by its path (claude-code-action installs a Bun of its own, first on PATH after it), run outside the
           # checkouts: Bun reads bunfig.toml from its working directory. The pull request's binding, the default branch's server
           ( cd "$RUNNER_TEMP" && "${{ steps.bun.outputs.bun-path }}" "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" "$W/pr-head" --base "$BASE" \
-            --server "$SA_INDEX_MCP_URL" --findings "$W/.sa-review/findings.json" --body-file "$W/.sa-review/pr-body.md" --out "$RUNNER_TEMP/review.md" > /dev/null )
+            --server "$SA_INDEX_MCP_URL" --findings "$W/.sa-review/findings.json" --body-file "$W/.sa-review/pr-body.md" --out "$RUNNER_TEMP/review.md" --status-out "$RUNNER_TEMP/status.txt" > /dev/null )
           verdict=$?
           [ -s "$RUNNER_TEMP/review.md" ] || { echo "::error::review-check.js wrote no review (exit $verdict)"; exit 1; }
           cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
@@ -173,12 +178,12 @@ jobs:
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/review.md" > /dev/null
           else gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/review.md"; fi
           state=$([ "$verdict" -eq 0 ] && echo success || echo failure)
-          summary=$(sed -n 's/^Held to .*: \(.*\)\.$/\1/p' "$RUNNER_TEMP/review.md" | head -n 1)
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state="$state" -f context="Architecture review" -f description="${summary:-see the review}" -f target_url="$RUN_URL" > /dev/null
+          summary=$(head -n 1 "$RUNNER_TEMP/status.txt" 2>/dev/null)
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state="$state" -f context="Architecture review" -f description="${summary:-${{ vars.SA_DOC_LANGUAGE == 'es' && 'vea la revisión' || 'see the review' }}}" -f target_url="$RUN_URL" > /dev/null
           touch "$RUNNER_TEMP/status-posted"
           exit $verdict
       - name: The status, when the verdict never ran
         if: always() && github.event.pull_request.head.repo.full_name == github.repository
         run: |
           [ -e "$RUNNER_TEMP/status-posted" ] && exit 0
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=failure -f context="Architecture review" -f description="the review did not finish: re-run it" -f target_url="$RUN_URL" > /dev/null
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state=failure -f context="Architecture review" -f description="${{ vars.SA_DOC_LANGUAGE == 'es' && 'la revisión no terminó: vuelva a ejecutarla' || 'the review did not finish: re-run it' }}" -f target_url="$RUN_URL" > /dev/null
