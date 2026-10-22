@@ -8,8 +8,9 @@
 #                exactly, the architecture's names, no gap filled, security never worked around, the standards and ADRs,
 #                budgets — and writes its findings, each citing the pack part
 #   3. verdict   review-check.js decides: a blocking finding stands unless an open [ESC-…] issue of the architecture
-#                repository (SA_ARCHITECTURE_REPO) that the pull request cites covers it; no findings fail closed. One
-#                comment on the pull request, updated on every run
+#                repository (SA_ARCHITECTURE_REPO) that the pull request cites covers it; no findings fail closed. A pull
+#                request that passes only because an escalation covers it is HELD: the status stays pending, so it cannot
+#                merge before the architect answers (10.19.0). One comment on the pull request, updated on every run
 #
 # The pull request never runs its own review (10.16.2). pull_request_target runs this file as the default branch has it,
 # so a pull request that edits the review — the verdict's exit code, the prompt, the tools — is reviewed by the review in
@@ -21,7 +22,7 @@
 # (Bun reads bunfig.toml, preload included, from its working directory). The action works with this job's GITHUB_TOKEN —
 # no OIDC exchange, which pull_request_target refuses. The result is the commit status "Architecture review" on the pull
 # request's head commit — the required check. A pull request from a fork fails it.
-# The re-check (10.18.0): a PASS that an escalation cleared stands on that escalation staying open. When an [ESC-…] issue
+# The re-check (10.18.0): a HELD review stands on its escalation staying open. When an [ESC-…] issue
 # closes — or is transferred, deleted or retitled — the architecture repository's architecture-escalations.yml dispatches
 # architecture-escalation-closed here (its SA_SERVICE_REPOS lists this repository); the hourly schedule is the fallback. The
 # recheck job runs no model and checks out nothing: review-check.js --recheck reads the escalations each open pull request's
@@ -57,7 +58,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.18.0
+  SA_PLUGIN_REF: v10.19.0
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
@@ -214,10 +215,12 @@ jobs:
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- sa-architecture-review -->")) | .id' | head -n 1)
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/review.md" > /dev/null
           else gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/review.md"; fi
-          state=$([ "$verdict" -eq 0 ] && echo success || echo failure)
+          # HELD (3): nothing blocks, an open escalation is waited on — pending keeps a required check from letting it merge
+          state=$(case "$verdict" in 0) echo success ;; 3) echo pending ;; *) echo failure ;; esac)
           summary=$(head -n 1 "$RUNNER_TEMP/status.txt" 2>/dev/null)
           gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD" -f state="$state" -f context="Architecture review" -f description="${summary:-${{ vars.SA_DOC_LANGUAGE == 'es' && 'vea la revisión' || 'see the review' }}}" -f target_url="$RUN_URL" > /dev/null
           touch "$RUNNER_TEMP/status-posted"
+          [ "$verdict" -eq 3 ] && exit 0
           exit $verdict
       - name: The status, when the verdict never ran
         if: always() && github.event.pull_request.head.repo.full_name == github.repository
