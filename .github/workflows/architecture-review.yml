@@ -47,8 +47,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, edited]   # edited: the body may now cite an escalation
   repository_dispatch:
     types: [architecture-escalation-closed]   # the architecture repository: an [ESC-…] issue closed, transferred, deleted, retitled
+  # the fallback sweep, for a dispatch that never came. GitHub disables a public repository's schedule after 60 days without
+  # activity and says nothing: ci-setup.js service … --review reports it, gh workflow enable architecture-review.yml restores it
   schedule:
-    - cron: '23 * * * *'                     # the fallback sweep, for a dispatch that never came
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 permissions: {}
@@ -58,7 +60,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.19.2
+  SA_PLUGIN_REF: v10.19.3
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
@@ -211,8 +213,8 @@ jobs:
           verdict=$?
           [ -s "$RUNNER_TEMP/review.md" ] || { echo "::error::review-check.js wrote no review (exit $verdict)"; exit 1; }
           cat "$RUNNER_TEMP/review.md" >> "$GITHUB_STEP_SUMMARY"
-          # one comment, updated on every run
-          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- sa-architecture-review -->")) | .id' | head -n 1)
+          # one comment, updated on every run — this job's own (GITHUB_TOKEN writes as github-actions[bot]), never another author's
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- sa-architecture-review -->"))) | .id' | head -n 1)
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@"$RUNNER_TEMP/review.md" > /dev/null
           else gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/review.md"; fi
           # HELD (3): nothing blocks, an open escalation is waited on — pending keeps a required check from letting it merge
