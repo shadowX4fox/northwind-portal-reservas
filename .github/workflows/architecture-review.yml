@@ -21,6 +21,11 @@
 # (Bun reads bunfig.toml, preload included, from its working directory). The action works with this job's GITHUB_TOKEN —
 # no OIDC exchange, which pull_request_target refuses. The result is the commit status "Architecture review" on the pull
 # request's head commit — the required check. A pull request from a fork fails it.
+# The re-check (10.18.0): a PASS that an escalation cleared stands on that escalation staying open. When an [ESC-…] issue
+# closes — or is transferred, deleted or retitled — the architecture repository's architecture-escalations.yml dispatches
+# architecture-escalation-closed here (its SA_SERVICE_REPOS lists this repository); the hourly schedule is the fallback. The
+# recheck job runs no model and checks out nothing: review-check.js --recheck reads the escalations each open pull request's
+# review comment records for its head, asks GitHub for their state, and fails the status of a pull request one no longer covers.
 # On a self-hosted runner Claude never loads the runner user's ~/.claude: its step has a HOME and CLAUDE_CONFIG_DIR of its
 # own, where the action also installs its Bun; this job's own Bun has another (setup-bun writes $HOME/.bun).
 #
@@ -39,20 +44,52 @@ name: Architecture review
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, edited]   # edited: the body may now cite an escalation
+  repository_dispatch:
+    types: [architecture-escalation-closed]   # the architecture repository: an [ESC-…] issue closed, transferred, deleted, retitled
+  schedule:
+    - cron: '23 * * * *'                     # the fallback sweep, for a dispatch that never came
+  workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: architecture-review-${{ github.event.pull_request.number }}
+  group: architecture-review-${{ github.event.pull_request.number || 'recheck' }}
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.17.1
+  SA_PLUGIN_REF: v10.18.0
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
+  recheck:
+    name: recheck
+    if: github.event_name != 'pull_request_target'
+    runs-on: ${{ fromJSON(vars.SA_REVIEW_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write         # the review comment gets the line that says why it failed
+      issues: read
+      statuses: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SA_DOC_LANGUAGE: ${{ vars.SA_DOC_LANGUAGE }}
+      ESCALATION: ${{ github.event.client_payload.ref }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: oven-sh/setup-bun@v2
+        id: bun
+        env:
+          HOME: ${{ runner.temp }}/bun-home
+        with:
+          bun-version: 1.4.2
+      - name: The pull requests an escalation cleared, held to it again
+        run: |
+          [ -n "$ESCALATION" ] && echo "escalation: $ESCALATION ${{ github.event.client_payload.action }}"
+          git clone --quiet --depth 1 --branch "$SA_PLUGIN_REF" "$SA_PLUGIN_REPO" "$RUNNER_TEMP/sa"
+          cd "$RUNNER_TEMP" && "${{ steps.bun.outputs.bun-path }}" "$RUNNER_TEMP/sa/plugins/sa-delivery/skills/architecture-index-export/scripts/review-check.js" --recheck "$GITHUB_REPOSITORY" --run-url "$RUN_URL"
   review:
     name: review
+    if: github.event_name == 'pull_request_target'
     runs-on: ${{ fromJSON(vars.SA_REVIEW_RUNS_ON || '"ubuntu-latest"') }}
     timeout-minutes: 30
     permissions:
