@@ -98,7 +98,7 @@ export interface components {
              * @description Código estable del error.
              * @enum {string}
              */
-            code: "UNAUTHENTICATED" | "FORBIDDEN" | "VALIDATION_FAILED" | "BOOKING_NOT_FOUND" | "ROOM_OCCUPIED" | "DAILY_LIMIT_REACHED" | "BOOKING_IN_PROGRESS";
+            code: "UNAUTHENTICATED" | "FORBIDDEN" | "VALIDATION_FAILED" | "BOOKING_NOT_FOUND" | "ROOM_NOT_FOUND" | "ROOM_OCCUPIED" | "DAILY_LIMIT_REACHED" | "BOOKING_IN_PROGRESS";
         };
         AvailabilityResponse: {
             rooms?: components["schemas"]["RoomAvailability"][];
@@ -288,6 +288,15 @@ export interface operations {
             };
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthenticated"];
+            /** @description `ROOM_NOT_FOUND`: `roomId` inexistente en la creación de la reserva (CU2). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description `ROOM_OCCUPIED` (sala ocupada, ADR-102) o `DAILY_LIMIT_REACHED` (límite diario: 3 reservas futuras ese día). */
             409: {
                 headers: {

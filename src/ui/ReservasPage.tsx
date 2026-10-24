@@ -66,7 +66,7 @@ export function ReservasPage({ scope, recepcion }: { scope?: 'site'; recepcion: 
 }
 
 function nombreSede(site: unknown): string {
-  // TODO(architecture): "type of site en Booking" no documentado (asset:openapi.yaml del Servicio de Reservas, línea 346).
+  // TODO(architecture): "type of site en Booking" no documentado (asset:openapi.yaml del Servicio de Reservas, línea 353).
   return SEDES.find((s) => s.id === site)?.nombre ?? String(site ?? '');
 }
 
