@@ -5,6 +5,7 @@ const POR_CODIGO: Record<string, string> = {
   FORBIDDEN: 'No autorizado.',
   VALIDATION_FAILED: 'Los datos no son válidos.',
   BOOKING_NOT_FOUND: 'La reserva no existe.',
+  ROOM_NOT_FOUND: 'La sala no existe.',
   ROOM_OCCUPIED: 'La sala ya está ocupada en esa franja.',
   DAILY_LIMIT_REACHED: 'Alcanzaste el límite de 3 reservas futuras para ese día.',
   BOOKING_IN_PROGRESS: 'La reserva ya está en curso y no se puede cancelar.',

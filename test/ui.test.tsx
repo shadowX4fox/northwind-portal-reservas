@@ -121,6 +121,14 @@ describe('Salas', () => {
     await user.click(screen.getByRole('button', { name: 'Confirmar' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('La sala ya está ocupada en esa franja.');
   });
+
+  it('muestra el rechazo por sala inexistente', async () => {
+    const { user } = renderApp(fakeClient({ createBooking: vi.fn().mockRejectedValue(new ApiProblem(404, 'ROOM_NOT_FOUND')) }));
+    await user.click(screen.getByRole('button', { name: 'Consultar' }));
+    await user.click(await screen.findByRole('button', { name: 'Reservar Pacífico' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('La sala no existe.');
+  });
 });
 
 describe('Mis reservas', () => {
