@@ -60,7 +60,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v10.19.3
+  SA_PLUGIN_REF: v10.19.5
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
@@ -84,7 +84,7 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/bun-home
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - name: The pull requests an escalation cleared, held to it again
         run: |
           [ -n "$ESCALATION" ] && echo "escalation: $ESCALATION ${{ github.event.client_payload.action }}"
@@ -133,7 +133,7 @@ jobs:
         env:
           HOME: ${{ runner.temp }}/bun-home   # setup-bun installs into $HOME/.bun: never the runner user's own Bun
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - name: The plugin, the MCP server, the diff
         env:
           BODY: ${{ github.event.pull_request.body }}
