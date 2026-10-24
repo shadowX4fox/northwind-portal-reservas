@@ -2,7 +2,7 @@
   "name": "portal-de-reservas",
   "private": true,
   "version": "1.0.2",
-  "description": "Portal de Reservas — SPA de Reservas de Salas Northwind (arquitectura northwind-reservas 1.9.0)",
+  "description": "Portal de Reservas — SPA de Reservas de Salas Northwind (arquitectura northwind-reservas 1.9.1)",
   "type": "module",
   "scripts": {
     "dev": "vite",

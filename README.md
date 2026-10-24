@@ -4,7 +4,7 @@ Portal de Reservas — la SPA de Reservas de Salas Northwind (React 18, TypeScri
 
 Cada pull request pasa la revisión de arquitectura (`.github/workflows/architecture-review.yml`).
 
-**Arquitectura**: versión 1.9.0, `pack_revision` en `.architecture.json`.
+**Arquitectura**: versión 1.9.1, `pack_revision` en `.architecture.json`.
 
 ## Uso
 
@@ -21,8 +21,8 @@ npm run contracts:verify     # las copias de los contratos son los bytes del bui
 
 | Archivo | Origen |
 |---|---|
-| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.9.0) |
-| `contracts/servicio-de-reservas/openapi.yaml` | `asset:openapi.yaml` del build pack de Servicio de Reservas (1.9.0) — el contrato de I-02 que consume el portal |
+| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.9.1) |
+| `contracts/servicio-de-reservas/openapi.yaml` | `asset:openapi.yaml` del build pack de Servicio de Reservas (1.9.1) — el contrato de I-02 que consume el portal |
 
 `src/api/servicio-de-reservas.d.ts` se genera de esa copia (`npm run contracts:generate`). Las copias no se editan.
 
@@ -33,6 +33,8 @@ npm run contracts:verify     # las copias de los contratos son los bytes del bui
 - **ADR-103** — una `Idempotency-Key` (UUID v4) por confirmación; un reintento de la misma confirmación la repite.
 - **ADR-105** — la vista "Reservas de la sede" aparece solo si el Servicio de Reservas acepta `scope=site` para el token; el portal no interpreta claims.
 - **ADR-110** — "ahora" en `America/Bogota`; no se ofrecen franjas pasadas.
+- **ADR-101** — el portal llama al Servicio de Reservas directamente por HTTPS/JSON, sin API Gateway, service mesh ni event bus.
+- **ADR-107** — `npm run build` produce el paquete estático que sirve el CDN de Plataforma Northwind; el portal no tiene réplicas propias.
 - **ADR-004** — trazas, métricas RED por operación, tiempo "Confirmar → código" y logs JSON (`trace_id`, `span_id`, `service.name`, nivel, tokens redactados) por OTLP/HTTP al colector de Plataforma Northwind; `traceparent` en cada llamada.
 
 ## Preguntas abiertas para el arquitecto

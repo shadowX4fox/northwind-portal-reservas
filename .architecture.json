@@ -2,6 +2,6 @@
   "server": "http://localhost:18080/mcp",
   "project": "northwind-reservas",
   "component": "portal-de-reservas",
-  "architecture_version": "1.9.0",
-  "pack_revision": "3cbd2ff1133f9cd5e9eb861a3bfd62e9fd1b846238009ea9502a4161b499f278"
+  "architecture_version": "1.9.1",
+  "pack_revision": "c4c062e73495a2db4014177ea669306dfb04b19c17ec8aad48a668eefb35a859"
 }
