@@ -217,7 +217,7 @@ function ReservaDialog({ sala, franja, onClose }: { sala: RoomAvailability; fran
         <form onSubmit={confirmar}>
           <label>
             Asunto
-            <input value={subject} maxLength={80} onChange={(e) => setSubject(e.target.value)} />
+            <input value={subject} maxLength={120} onChange={(e) => setSubject(e.target.value)} />
           </label>
           {error && <p role="alert">{error}</p>}
           <button type="submit" disabled={enviando}>
