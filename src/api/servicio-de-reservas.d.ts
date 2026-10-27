@@ -170,7 +170,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description `VALIDATION_FAILED`: franja fuera de múltiplos de 30 minutos, de más de 8 horas o en el pasado; asunto de más de 80 caracteres; motivo de menos de 10 o más de 120 caracteres, o ausente para `recepcion`. */
+        /** @description `VALIDATION_FAILED`: franja fuera de múltiplos de 30 minutos, de más de 8 horas o en el pasado; asunto de más de 120 caracteres; motivo de menos de 10 o más de 120 caracteres, o ausente para `recepcion`. */
         ValidationFailed: {
             headers: {
                 [name: string]: unknown;

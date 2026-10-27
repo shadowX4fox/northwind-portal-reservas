@@ -4,7 +4,7 @@ Portal de Reservas — la SPA de Reservas de Salas Northwind (React 18, TypeScri
 
 Cada pull request pasa la revisión de arquitectura (`.github/workflows/architecture-review.yml`).
 
-**Arquitectura**: versión 1.9.1, `pack_revision` en `.architecture.json`.
+**Arquitectura**: versión 1.10.0, `pack_revision` en `.architecture.json`.
 
 ## Uso
 
@@ -21,8 +21,8 @@ npm run contracts:verify     # las copias de los contratos son los bytes del bui
 
 | Archivo | Origen |
 |---|---|
-| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.9.1) |
-| `contracts/servicio-de-reservas/openapi.yaml` | `asset:openapi.yaml` del build pack de Servicio de Reservas (1.9.1) — el contrato de I-02 que consume el portal |
+| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.10.0) |
+| `contracts/servicio-de-reservas/openapi.yaml` | `asset:openapi.yaml` del build pack de Servicio de Reservas (1.10.0) — el contrato de I-02 que consume el portal |
 
 `src/api/servicio-de-reservas.d.ts` se genera de esa copia (`npm run contracts:generate`). Las copias no se editan.
 

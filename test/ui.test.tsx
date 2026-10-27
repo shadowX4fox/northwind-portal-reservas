@@ -129,6 +129,17 @@ describe('Salas', () => {
     await user.click(screen.getByRole('button', { name: 'Confirmar' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('La sala no existe.');
   });
+
+  it('admite un asunto de hasta 120 caracteres y no más (contrato 1.3.0, BookingRequest.subject)', async () => {
+    const { client, user } = renderApp();
+    await user.click(screen.getByRole('button', { name: 'Consultar' }));
+    await user.click(await screen.findByRole('button', { name: 'Reservar Pacífico' }));
+    await user.type(screen.getByLabelText('Asunto'), 'a'.repeat(125));
+    expect(screen.getByLabelText('Asunto')).toHaveValue('a'.repeat(120));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await screen.findByTestId('codigo-reserva');
+    expect(client.createBooking.mock.calls[0][0].subject).toBe('a'.repeat(120));
+  });
 });
 
 describe('Mis reservas', () => {
