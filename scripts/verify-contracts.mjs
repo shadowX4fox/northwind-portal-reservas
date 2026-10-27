@@ -3,10 +3,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const CONTRACTS = {
-  // asset:c4-descriptor.md del build pack de Portal de Reservas, 1.9.1
+  // asset:c4-descriptor.md del build pack de Portal de Reservas, 1.10.0
   'architecture/c4-descriptor.md': '525459ca95a6bb16b565b74617fdfcd1e0448e1520fb551c794e5a68c61c0126',
-  // asset:openapi.yaml del build pack de Servicio de Reservas, 1.9.1 (pack_revision 1912650e96a950dcf232100324baa35e74e63f1ea76c9403cc7f35934c8d7d41)
-  'contracts/servicio-de-reservas/openapi.yaml': '0685687c32a8f4b7e76a7a635524886fde7d4e4f702241ba12d42d6415748091',
+  // asset:openapi.yaml del build pack de Servicio de Reservas, 1.10.0 (pack_revision 454e3ff928db647e9af704f6bf9a60e9545b8040619654d1e9869a342e7ffeca)
+  'contracts/servicio-de-reservas/openapi.yaml': '07537e884fe847a6b0ed94d4f5037e31634fe6dd3d79c08daf686d4aa98a7fc3',
 };
 
 let failed = false;
