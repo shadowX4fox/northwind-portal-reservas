@@ -1,4 +1,4 @@
-// Aceptación de la Especificación de Componente: INV-01, INV-02, INV-03, INV-04, INV-09, INV-10.
+// Aceptación de la Especificación de Componente: INV-01, INV-02, INV-03, INV-04, INV-09, INV-10, INV-11.
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiProblem, ServiceUnavailable, type Booking, type ServicioDeReservasClient } from '../src/api/client';
@@ -153,6 +153,26 @@ describe('Mis reservas', () => {
     await user.click(await screen.findByRole('button', { name: 'Confirmar cancelación' }));
     expect(client.cancelBooking).toHaveBeenCalledWith('RS-MIA00001', undefined);
     expect(await screen.findByText('Reserva RS-MIA00001 cancelada.')).toBeInTheDocument();
+  });
+
+  it('muestra en cada reserva cancelada la fecha de cancelación y, cuando existe, el motivo (INV-11)', async () => {
+    const client = fakeClient({
+      listBookings: vi.fn(async (scope?: 'site') => {
+        if (scope === 'site') throw new ApiProblem(403, 'FORBIDDEN');
+        return [
+          booking('RS-CANC0001', { status: 'cancelled', cancelledAt: '2026-10-21T14:05:00Z', cancellationReason: 'Sala en mantenimiento' }),
+          booking('RS-CANC0002', { status: 'cancelled', cancelledAt: '2026-10-21T03:30:00Z' }),
+        ];
+      }),
+    });
+    const { user } = renderApp(client);
+    await user.click(screen.getByRole('button', { name: 'Mis reservas' }));
+    const [conMotivo, sinMotivo] = within(await screen.findByRole('list', { name: 'Mis reservas' })).getAllByRole('listitem');
+    // `cancelledAt` sigue en ISO 8601, como lo devuelve el servicio (ADR-110, fuera de alcance)
+    expect(conMotivo).toHaveTextContent('RS-CANC0001 · Centro · 2026-10-22 09:00–10:00 · Comité · Cancelada · Cancelada el 2026-10-21T14:05:00Z · Motivo: Sala en mantenimiento');
+    expect(sinMotivo).toHaveTextContent('Cancelada · Cancelada el 2026-10-21T03:30:00Z');
+    expect(sinMotivo).not.toHaveTextContent('Motivo');
+    expect(screen.queryByRole('button', { name: /^Cancelar RS-CANC/ })).not.toBeInTheDocument();
   });
 
   it('muestra "reserva en curso" cuando el servicio la rechaza', async () => {

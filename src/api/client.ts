@@ -1,6 +1,6 @@
 // Portal de Reservas → Servicio de Reservas (I-02): REST sobre HTTPS con JSON, contrato OpenAPI 3.1 (ADR-001).
 // El contrato es contracts/servicio-de-reservas/openapi.yaml, copia byte a byte del asset:openapi.yaml del build pack
-// del Servicio de Reservas (1.10.0); los tipos de servicio-de-reservas.d.ts se generan de esa copia.
+// del Servicio de Reservas (1.10.1); los tipos de servicio-de-reservas.d.ts se generan de esa copia.
 //
 // TODO(architecture): "archivo del contrato: [NOT DOCUMENTED — add contract reference to docs/05-integration-points.md]"
 //   (interface:portal-de-reservas→servicio-de-reservas, línea 34). Se usa el openapi.yaml que publica el Servicio de Reservas.
