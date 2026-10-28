@@ -4,7 +4,7 @@ Portal de Reservas — la SPA de Reservas de Salas Northwind (React 18, TypeScri
 
 Cada pull request pasa la revisión de arquitectura (`.github/workflows/architecture-review.yml`).
 
-**Arquitectura**: versión 1.10.0, `pack_revision` en `.architecture.json`.
+**Arquitectura**: versión 1.10.1, `pack_revision` en `.architecture.json`.
 
 ## Uso
 
@@ -12,7 +12,7 @@ Cada pull request pasa la revisión de arquitectura (`.github/workflows/architec
 npm ci
 cp .env.example .env.local   # completar: sin estos valores el portal no arranca
 npm run dev
-npm test                     # invariantes INV-01…INV-10 de la Especificación de Componente
+npm test                     # invariantes INV-01…INV-11 de la Especificación de Componente
 npm run build                # archivos estáticos en dist/
 npm run contracts:verify     # las copias de los contratos son los bytes del build pack
 ```
@@ -21,8 +21,8 @@ npm run contracts:verify     # las copias de los contratos son los bytes del bui
 
 | Archivo | Origen |
 |---|---|
-| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.10.0) |
-| `contracts/servicio-de-reservas/openapi.yaml` | `asset:openapi.yaml` del build pack de Servicio de Reservas (1.10.0) — el contrato de I-02 que consume el portal |
+| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.10.1) |
+| `contracts/servicio-de-reservas/openapi.yaml` | `asset:openapi.yaml` del build pack de Servicio de Reservas (1.10.1) — el contrato de I-02 que consume el portal |
 
 `src/api/servicio-de-reservas.d.ts` se genera de esa copia (`npm run contracts:generate`). Las copias no se editan.
 
@@ -44,7 +44,8 @@ Cada una queda como `TODO(architecture)` en el código; ninguna bloquea la const
 | Parte | Línea | Pregunta |
 |---|---|---|
 | `spec` | 9 | Equipo responsable no documentado |
-| `spec` | 144–148 | Latencia p99, error budget, throughput y techo de costo no documentados |
+| `spec` | 135 | INV-11: zona y formato de presentación de `cancelledAt` no documentados (ADR-110 lo deja en ISO 8601, fuera de su alcance) |
+| `spec` | 145–149 | Latencia p99, error budget, throughput y techo de costo no documentados |
 | `security` | 59 | Clasificación de los datos (data sensitivity) no documentada |
 | `security` | T4-R, T5-D, T6-E | Mitigaciones en Keycloak 25 no documentadas |
 | `interface:portal-de-reservas→proveedor-de-identidad-northwind` | 112–116 | Semántica de fallo del upstream (timeout, no disponible, fallo parcial, versiones) |

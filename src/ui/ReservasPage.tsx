@@ -1,5 +1,6 @@
 // INV-03: "Mis reservas" — reservas futuras del miembro, con su cancelación.
 // INV-04: "Reservas de la sede" — el recepcionista cancela cualquier reserva de su sede (`scope=site`, ADR-105).
+// INV-11: cada reserva cancelada muestra su fecha de cancelación (`cancelledAt`) y, cuando existe, el motivo (`cancellationReason`).
 // La autorización la decide el Servicio de Reservas; el portal solo presenta lo que el servicio devuelve.
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { Booking } from '../api/client';
@@ -41,6 +42,10 @@ export function ReservasPage({ scope, recepcion }: { scope?: 'site'; recepcion: 
           {reservas.map((b) => (
             <li key={b.code}>
               <strong>{b.code}</strong> · {nombreSede(b.site)} · {b.date} {b.start}–{b.end} · {b.subject} · {ESTADO[b.status] ?? b.status}
+              {/* ADR-110: `cancelledAt` es una marca de tiempo técnica y sigue en ISO 8601; se muestra como la devuelve el servicio. */}
+              {/* TODO(architecture): zona y formato de presentación de `cancelledAt` no documentados (spec INV-11; ADR-110 lo deja fuera de su alcance). */}
+              {b.status === 'cancelled' && b.cancelledAt && <> · Cancelada el {b.cancelledAt}</>}
+              {b.status === 'cancelled' && b.cancellationReason && <> · Motivo: {b.cancellationReason}</>}
               {b.status === 'confirmed' && (
                 <button type="button" onClick={() => setCancelando(b.code)}>
                   Cancelar {b.code}
