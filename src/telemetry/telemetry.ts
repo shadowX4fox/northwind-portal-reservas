@@ -47,7 +47,7 @@ export const tracer = () => trace.getTracer(SCOPE, SERVICE_VERSION);
 // Métricas RED (tasa, errores, duración) por operación hacia el Servicio de Reservas (ADR-004).
 // TODO(architecture): presupuestos del componente no documentados — "| Latencia p99 | [NOT DOCUMENTED — run
 //   /sa-analysis:architecture-analysis latency-budget] |", ídem Error budget, Throughput (pico/sostenido) y Techo de costo
-//   (spec, líneas 144–148); las fases 1 y 2 de F-01/F-02/F-03 tienen "Latency budget: Not documented". Se mide cada
+//   (spec, líneas 145–149); las fases 1 y 2 de F-01/F-02/F-03 tienen "Latency budget: Not documented". Se mide cada
 //   operación contra la meta del flujo: F-01 ≤ 1 s p95, F-02 y F-03 ≤ 2 s p95.
 const meter = () => metrics.getMeter(SCOPE, SERVICE_VERSION);
 let red: ReturnType<typeof createRed> | undefined;
@@ -59,6 +59,10 @@ function createRed() {
     duration: m.createHistogram('portal.servicio_de_reservas.duration', { description: 'Duración de cada solicitud al Servicio de Reservas', unit: 'ms' }),
     confirmation: m.createHistogram('portal.booking.confirmation.duration', {
       description: 'Tiempo desde "Confirmar" hasta ver el código de reserva (meta p95 ≤ 2 s, PO Spec §8)',
+      unit: 'ms',
+    }),
+    availability: m.createHistogram('portal.availability.duration', {
+      description: 'Tiempo hasta ver la disponibilidad (meta p95 ≤ 1 s, flujo Consultar disponibilidad)',
       unit: 'ms',
     }),
   };
@@ -74,6 +78,13 @@ export function recordRequest(operation: string, durationMs: number, outcome: { 
 
 export function recordBookingConfirmation(durationMs: number): void {
   instruments().confirmation.record(durationMs);
+}
+
+// TODO(architecture): la meta dice "Tiempo hasta ver la disponibilidad, desde que el miembro abre "Salas" o cambia sede,
+//   fecha o franja, p95 ≤ 1 s" (spec, línea 154), pero el portal consulta cuando el miembro pulsa "Consultar" o una franja
+//   sugerida, no al abrir "Salas" ni al cambiar sede, fecha o franja: el reloj arranca ahí.
+export function recordAvailability(durationMs: number): void {
+  instruments().availability.record(durationMs);
 }
 
 // Logs JSON estructurados con trace_id, span_id, service.name y nivel; nunca tokens ni datos personales completos (ADR-004).

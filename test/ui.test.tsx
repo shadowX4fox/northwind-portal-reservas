@@ -3,7 +3,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiProblem, ServiceUnavailable, type Booking, type ServicioDeReservasClient } from '../src/api/client';
 import type { Auth } from '../src/auth/auth';
+import { recordAvailability } from '../src/telemetry/telemetry';
 import { App } from '../src/ui/App';
+
+vi.mock('../src/telemetry/telemetry', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/telemetry/telemetry')>()),
+  recordAvailability: vi.fn(),
+}));
 
 const AHORA = { date: '2026-10-21', minutes: 8 * 60 + 10 };
 
@@ -61,6 +67,23 @@ describe('Salas', () => {
       expect.stringContaining('Andes · 12 personas · Pantalla, Videoconferencia · Libre'),
       expect.stringContaining('Caribe · 2 personas · Ocupada'),
     ]);
+  });
+
+  it('mide el tiempo hasta ver la disponibilidad (meta p95 ≤ 1 s)', async () => {
+    vi.mocked(recordAvailability).mockClear();
+    const { user } = renderApp();
+    await user.click(screen.getByRole('button', { name: 'Consultar' }));
+    await screen.findByRole('list', { name: 'Salas' });
+    expect(recordAvailability).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(recordAvailability).mock.calls[0][0]).toBeGreaterThanOrEqual(0);
+  });
+
+  it('no mide la disponibilidad cuando la consulta falla', async () => {
+    vi.mocked(recordAvailability).mockClear();
+    const { user } = renderApp(fakeClient({ getAvailability: vi.fn(async () => { throw new ServiceUnavailable(); }) }));
+    await user.click(screen.getByRole('button', { name: 'Consultar' }));
+    await screen.findByRole('alert');
+    expect(recordAvailability).not.toHaveBeenCalled();
   });
 
   it('no ofrece franjas anteriores a la hora actual de la sede (INV-10)', () => {
