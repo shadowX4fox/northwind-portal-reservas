@@ -60,7 +60,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SA_PLUGIN_REF: v11.0.0
+  SA_PLUGIN_REF: v11.1.1
   SA_PLUGIN_REPO: https://github.com/shadowx4fox/solutions-architect-skills.git
 
 jobs:
