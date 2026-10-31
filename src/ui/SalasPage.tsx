@@ -3,7 +3,7 @@
 // INV-10: no se puede elegir una franja anterior a la hora actual de la sede (America/Bogota).
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import type { AvailabilityResponse, Booking, RoomAvailability } from '../api/client';
-import { recordBookingConfirmation } from '../telemetry/telemetry';
+import { recordAvailability, recordBookingConfirmation } from '../telemetry/telemetry';
 import { ahoraEnSede, esFranjaElegible, finesPosibles, iniciosElegibles, SEDES, type AhoraEnSede, type Sede } from '../time/sedeClock';
 import { useClient } from './context';
 import { EQUIPAMIENTO, mensajeDeError } from './messages';
@@ -40,9 +40,11 @@ export function SalasPage({ now = () => ahoraEnSede() }: { now?: () => AhoraEnSe
     }
     setCargando(true);
     setError(null);
+    const started = performance.now();
     try {
       setResultado(await client.getAvailability(franja));
       setConsulta(franja);
+      recordAvailability(performance.now() - started);
     } catch (e) {
       setResultado(null);
       setError(mensajeDeError(e));

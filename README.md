@@ -4,7 +4,7 @@ Portal de Reservas — la SPA de Reservas de Salas Northwind (React 18, TypeScri
 
 Cada pull request pasa la revisión de arquitectura (`.github/workflows/architecture-review.yml`).
 
-**Arquitectura**: versión 1.10.1, `pack_revision` en `.architecture.json`.
+**Arquitectura**: versión 1.10.2, `pack_revision` en `.architecture.json`.
 
 ## Uso
 
@@ -21,8 +21,8 @@ npm run contracts:verify     # las copias de los contratos son los bytes del bui
 
 | Archivo | Origen |
 |---|---|
-| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.10.1) |
-| `contracts/servicio-de-reservas/openapi.yaml` | `asset:openapi.yaml` del build pack de Servicio de Reservas (1.10.1) — el contrato de I-02 que consume el portal |
+| `architecture/c4-descriptor.md` | `asset:c4-descriptor.md` del build pack de Portal de Reservas (1.10.2) |
+| `architecture/deps/servicio-de-reservas/openapi.yaml` | `dependency:servicio-de-reservas/openapi.yaml` del build pack de Portal de Reservas (1.10.2) — el contrato de I-02 que consume el portal |
 
 `src/api/servicio-de-reservas.d.ts` se genera de esa copia (`npm run contracts:generate`). Las copias no se editan.
 
@@ -35,7 +35,7 @@ npm run contracts:verify     # las copias de los contratos son los bytes del bui
 - **ADR-110** — "ahora" en `America/Bogota`; no se ofrecen franjas pasadas.
 - **ADR-101** — el portal llama al Servicio de Reservas directamente por HTTPS/JSON, sin API Gateway, service mesh ni event bus.
 - **ADR-107** — `npm run build` produce el paquete estático que sirve el CDN de Plataforma Northwind; el portal no tiene réplicas propias.
-- **ADR-004** — trazas, métricas RED por operación, tiempo "Confirmar → código" y logs JSON (`trace_id`, `span_id`, `service.name`, nivel, tokens redactados) por OTLP/HTTP al colector de Plataforma Northwind; `traceparent` en cada llamada.
+- **ADR-004** — trazas, métricas RED por operación, tiempo "Confirmar → código", tiempo hasta ver la disponibilidad y logs JSON (`trace_id`, `span_id`, `service.name`, nivel, tokens redactados) por OTLP/HTTP al colector de Plataforma Northwind; `traceparent` en cada llamada.
 
 ## Preguntas abiertas para el arquitecto
 
@@ -46,6 +46,7 @@ Cada una queda como `TODO(architecture)` en el código; ninguna bloquea la const
 | `spec` | 9 | Equipo responsable no documentado |
 | `spec` | 135 | INV-11: zona y formato de presentación de `cancelledAt` no documentados (ADR-110 lo deja en ISO 8601, fuera de su alcance) |
 | `spec` | 145–149 | Latencia p99, error budget, throughput y techo de costo no documentados |
+| `spec` | 154 | Meta "tiempo hasta ver la disponibilidad" (p95 ≤ 1 s): arranca al abrir "Salas" o cambiar sede, fecha o franja, pero el portal consulta al pulsar "Consultar"; se mide desde ahí |
 | `security` | 59 | Clasificación de los datos (data sensitivity) no documentada |
 | `security` | T4-R, T5-D, T6-E | Mitigaciones en Keycloak 25 no documentadas |
 | `interface:portal-de-reservas→proveedor-de-identidad-northwind` | 112–116 | Semántica de fallo del upstream (timeout, no disponible, fallo parcial, versiones) |

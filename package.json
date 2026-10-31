@@ -2,14 +2,14 @@
   "name": "portal-de-reservas",
   "private": true,
   "version": "1.0.2",
-  "description": "Portal de Reservas — SPA de Reservas de Salas Northwind (arquitectura northwind-reservas 1.10.1)",
+  "description": "Portal de Reservas — SPA de Reservas de Salas Northwind (arquitectura northwind-reservas 1.10.2)",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "contracts:generate": "openapi-typescript contracts/servicio-de-reservas/openapi.yaml -o src/api/servicio-de-reservas.d.ts",
+    "contracts:generate": "openapi-typescript architecture/deps/servicio-de-reservas/openapi.yaml -o src/api/servicio-de-reservas.d.ts",
     "contracts:verify": "node scripts/verify-contracts.mjs"
   },
   "devDependencies": {

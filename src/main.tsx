@@ -1,4 +1,4 @@
-// Portal de Reservas — SPA de Reservas de Salas Northwind (arquitectura northwind-reservas 1.10.1).
+// Portal de Reservas — SPA de Reservas de Salas Northwind (arquitectura northwind-reservas 1.10.2).
 import { UserManager } from 'oidc-client-ts';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

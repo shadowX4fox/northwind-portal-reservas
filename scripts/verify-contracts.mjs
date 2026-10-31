@@ -3,10 +3,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const CONTRACTS = {
-  // asset:c4-descriptor.md del build pack de Portal de Reservas, 1.10.1 (pack_revision e566ddfdc684043d2f71902b966f1d29e124880844f2c80f876c44d359db6a1a)
-  'architecture/c4-descriptor.md': 'a9576cc42215c80f844541a5900ebbb5034fc495d293ca3603c1dea8777ed9a6',
-  // asset:openapi.yaml del build pack de Servicio de Reservas, 1.10.1 (pack_revision ec23506c209e2df3d0e008fd5bc3e3a04a3d9d658749ef32f9d365b67d40974a)
-  'contracts/servicio-de-reservas/openapi.yaml': '07537e884fe847a6b0ed94d4f5037e31634fe6dd3d79c08daf686d4aa98a7fc3',
+  // asset:c4-descriptor.md del build pack de Portal de Reservas, 1.10.2 (pack_revision edb2cb3ba8122fe3952da149ac23f937dced7eff18538afe805f2052611bd4ff)
+  'architecture/c4-descriptor.md': 'a0305d3356a82b0d66d4cb340504e91b63e20d540434a6d9bd08f6061ba54154',
+  // dependency:servicio-de-reservas/openapi.yaml del build pack de Portal de Reservas, 1.10.2 (misma pack_revision)
+  'architecture/deps/servicio-de-reservas/openapi.yaml': '07537e884fe847a6b0ed94d4f5037e31634fe6dd3d79c08daf686d4aa98a7fc3',
 };
 
 let failed = false;
