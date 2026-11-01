@@ -54,5 +54,3 @@ Cada una queda como `TODO(architecture)` en el código; ninguna bloquea la const
 | `interface:portal-de-reservas→servicio-de-reservas` | 84 | Garantía de orden entre solicitudes |
 | `interface:portal-de-reservas→servicio-de-reservas` | 123–127 | Semántica de fallo del upstream |
 | `asset:openapi.yaml` (Servicio de Reservas) | 13, 31, 353 | Host del servidor; obligatoriedad de los parámetros de disponibilidad; tipo de `site` en `Booking` |
-
-<!-- CI speaks as Alia since sa-skills v11.3.0 -->
